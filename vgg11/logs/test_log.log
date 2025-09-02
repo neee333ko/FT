@@ -1,0 +1,31 @@
+nohup: ignoring input
+Not using distributed mode
+Namespace(data_path='/home/tongou.wei/workspace/dataset/imagenet', model='spiking_vgg11', device='cuda:0', batch_size=64, epochs=90, workers=16, opt='sgd', lr=0.1, momentum=0.9, weight_decay=0.0, norm_weight_decay=None, label_smoothing=0.1, mixup_alpha=0.2, cutmix_alpha=1.0, lr_scheduler='cosa', lr_warmup_epochs=5, lr_warmup_method='linear', lr_warmup_decay=0.01, lr_step_size=30, lr_gamma=0.1, output_dir='./logs', resume=None, start_epoch=0, cache_dataset=False, sync_bn=False, test_only=True, pretrained=False, auto_augment='ta_wide', random_erase=0.1, world_size=1, dist_url='env://', model_ema=False, model_ema_steps=32, model_ema_decay=0.99998, interpolation='bilinear', val_resize_size=232, val_crop_size=224, train_crop_size=176, clip_grad_norm=None, ra_sampler=False, ra_reps=4, prototype=False, weights=None, seed=2020, print_logdir=False, clean=False, disable_pinmemory=False, disable_amp=False, local_rank=None, disable_uda=False, T=4, cupy=False, distributed=False)
+Loading data
+Loading training data
+Took 0.0003254413604736328
+Loading validation data
+Traceback (most recent call last):
+  File "/home/tongou.wei/workspace/src/github.com/neee333ko/FT/vgg11/test.py", line 52, in <module>
+    trainer.main(args)
+  File "/home/tongou.wei/workspace/src/github.com/neee333ko/spikingjelly/spikingjelly/activation_based/model/train_classify.py", line 391, in main
+    dataset, dataset_test, train_sampler, test_sampler = self.load_data(args)
+                                                         ^^^^^^^^^^^^^^^^^^^^
+  File "/home/tongou.wei/workspace/src/github.com/neee333ko/spikingjelly/spikingjelly/activation_based/model/train_classify.py", line 171, in load_data
+    return self.load_ImageNet(args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/tongou.wei/workspace/src/github.com/neee333ko/spikingjelly/spikingjelly/activation_based/model/train_classify.py", line 279, in load_ImageNet
+    dataset_test = torchvision.datasets.ImageFolder(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/tongou.wei/Software/anaconda3/envs/py3.11/lib/python3.11/site-packages/torchvision/datasets/folder.py", line 328, in __init__
+    super().__init__(
+  File "/home/tongou.wei/Software/anaconda3/envs/py3.11/lib/python3.11/site-packages/torchvision/datasets/folder.py", line 149, in __init__
+    classes, class_to_idx = self.find_classes(self.root)
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/tongou.wei/Software/anaconda3/envs/py3.11/lib/python3.11/site-packages/torchvision/datasets/folder.py", line 234, in find_classes
+    return find_classes(directory)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/tongou.wei/Software/anaconda3/envs/py3.11/lib/python3.11/site-packages/torchvision/datasets/folder.py", line 41, in find_classes
+    classes = sorted(entry.name for entry in os.scandir(directory) if entry.is_dir())
+                                             ^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/home/tongou.wei/workspace/dataset/imagenet/val'
