@@ -34,8 +34,7 @@ class Cifar10NetTrainer(train_classify.Trainer_step):
         
         
 if __name__ == "__main__":
-    # -m torch.distributed.launch --nproc_per_node=2 spikingjelly.activation_based.model.train_imagenet_example
-    # python -m spikingjelly.activation_based.model.train_imagenet_example --T 4 --model spiking_resnet18 --data-path /datasets/ImageNet0_03125 --batch-size 64 --lr 0.1 --lr-scheduler cosa --epochs 90
+    # nohup python train.py --data-path ~/workspace/dataset --model CIFAR10Net --device cuda:5 -b 50 --epochs 50 -j 4 --lr 1e-3 --time-step 20 --opt adamw > ./logs/train_log.log 2>&1 &
     trainer = Cifar10NetTrainer()
     args = trainer.get_args_parser().parse_args()
     trainer.main(args)
