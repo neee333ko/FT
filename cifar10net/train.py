@@ -21,8 +21,10 @@ class Cifar10NetTrainer(train_classify.Trainer_step):
 
 
     def load_model(self, args, num_classes):
+        spiking_neurons = [neuron.IFNode] * 8
+    
         if args.model in parametric_lif_net.__all__:
-            model = parametric_lif_net.__dict__[args.model](spiking_neuron=neuron.IFNode,
+            model = parametric_lif_net.__dict__[args.model](spiking_neuron=spiking_neurons,
                                                         surrogate_function=surrogate.ATan(), detach_reset=True)
             functional.set_step_mode(model, step_mode='s')
             if args.cupy:
