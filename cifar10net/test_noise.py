@@ -101,7 +101,7 @@ class Cifar10NetTester(train_classify.Trainer_step):
     
     
     def get_tb_logdir_name(self, args):
-        tb_dir = 'test/'+ f'{args.model}' + '_test_Gaussian_noise_' + 'mean0_std1' 
+        tb_dir = 'test/'+ f'{args.model}' + '_test_Gaussian_noise_' + 'mean0_std1_ParametricDriveLIFNode' 
         return tb_dir
 
 
@@ -110,14 +110,8 @@ class Cifar10NetTester(train_classify.Trainer_step):
         
         header = f"Test: {log_suffix}"
         
-        tb_dir_2 = self.get_tb_logdir_name(args) + "_LIFnode"
-        tb_dir_2 = os.path.join(args.output_dir, tb_dir_2)
         
-        os.makedirs(tb_dir_2, exist_ok=True)
-        
-        tb_writer_2 = SummaryWriter(tb_dir_2, purge_step=args.start_epoch)
-        
-        spiking_neurons = [neuron.LIFNode] * 8
+        spiking_neurons = [neuron.ParametricDriveLIFNode] * 8
         
         model2 = parametric_lif_net.__dict__[args.model](spiking_neurons=spiking_neurons,
                                                         surrogate_function=surrogate.ATan(), detach_reset=True)
@@ -174,16 +168,7 @@ class Cifar10NetTester(train_classify.Trainer_step):
                 
                 num_processed_samples += batch_size
                 
-                tb_writer.add_scalar("loss", loss, idx)
-                tb_writer.add_scalar("acc1", acc1, idx)
-                tb_writer.add_scalar("acc5", acc5, idx)
-                tb_writer.add_scalar("velo", batch_size/processed_time, idx)
-                    
-                
-                tb_writer_2.add_scalar("loss", loss2, idx)
-                tb_writer_2.add_scalar("acc1", acc1_2, idx)
-                tb_writer_2.add_scalar("acc5", acc5_2, idx)
-                tb_writer_2.add_scalar("velo", batch_size/processed_time2, idx)
+
                 
                 processed_time = 0.
                 processed_time2 = 0.
@@ -218,7 +203,7 @@ class Cifar10NetTester(train_classify.Trainer_step):
             f"test_acc1={test_acc1:.3f}, "
             f"test_acc5={test_acc5:.3f}, "
             f"test_loss={test_loss:.6f}, "
-            "LIFNode: "
+            "ParametricDriveLIFNode: "
             f"test_acc1={test_acc1_2:.3f}, "
             f"test_acc5={test_acc5_2:.3f}, "
             f"test_loss={test_loss2:.6f}, "
@@ -226,10 +211,6 @@ class Cifar10NetTester(train_classify.Trainer_step):
 
              
             
-        tb_writer.flush()
-        tb_writer.close()
-        tb_writer_2.flush()
-        tb_writer_2.close()
 
 
 
@@ -250,7 +231,7 @@ class Cifar10NetTester(train_classify.Trainer_step):
         
         
 if __name__ == "__main__":
-    #nohup python test_noise.py -T 20 --data-path ~/workspace/dataset --model CIFAR10Net --device cuda:0 -j 4 --test-only --resume ./logs/pt/CIFAR10Net_t20_b50_e50_adamw_lr0.001_wd0.0_ls0.1_ma0.0_ca0.0_sbn0_ra0_re0.0_aaugNone_size176_232_224_seed2020/checkpoint_latest.pth --resume2 ./logs/pt/CIFAR10Net_t20_b50_e50_adamw_lr0.001_wd0.0_ls0.1_ma0.0_ca0.0_sbn0_ra0_re0.0_aaugNone_size176_232_224_seed2020_LIFNode/checkpoint_latest.pth  > ./logs/test_noise.log 2>&1 &
+    #nohup python test_noise.py -T 20 --data-path ~/workspace/dataset --model CIFAR10Net --device cuda:0 -j 4 --test-only --resume ./logs/pt/CIFAR10Net_t20_b50_e50_adamw_lr0.001_wd0.0_ls0.1_ma0.0_ca0.0_sbn0_ra0_re0.0_aaugNone_size176_232_224_seed2020/checkpoint_latest.pth --resume2 ./logs/pt/CIFAR10Net_t20_b50_e50_adamw_lr0.001_wd0.0_ls0.1_ma0.0_ca0.0_sbn0_ra0_re0.0_aaugNone_size176_232_224_seed2020_para_drive_LIFNode/checkpoint_latest.pth  > ./logs/test_noise_parametric_drive_LIFNode.log 2>&1 &
     
     trainer = Cifar10NetTester()
     args = trainer.get_args_parser().parse_args()

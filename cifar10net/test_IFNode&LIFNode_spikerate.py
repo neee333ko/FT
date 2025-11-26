@@ -32,7 +32,7 @@ class Cifar10NetTester(train_classify.Trainer_step):
     
     
     def get_tb_logdir_name(self, args):
-        tb_dir = 'test/'+ f'{args.model}' + '_test_IFNode&LIFNode_spikerate_' + f'{args.layer}'
+        tb_dir = 'test/'+ f'{args.model}' + '_test_IFNode&ParametricDriveLIFNode_spikerate_' + f'{args.layer}'
         return tb_dir
 
 
@@ -49,7 +49,7 @@ class Cifar10NetTester(train_classify.Trainer_step):
         # tb_writer_2 = SummaryWriter(tb_dir_2, purge_step=args.start_epoch)
         
 
-        spiking_neurons = [neuron.LIFNode] * 8
+        spiking_neurons = [neuron.ParametricDriveLIFNode] * 8
         model2 = parametric_lif_net.__dict__[args.model](spiking_neurons=spiking_neurons,
                                                         surrogate_function=surrogate.ATan(), detach_reset=True)
         
@@ -61,7 +61,7 @@ class Cifar10NetTester(train_classify.Trainer_step):
         model2.eval()
 
         spike_monitor_IF = monitor.OutputMonitor(model, neuron.IFNode)
-        spike_monitor_LIF = monitor.OutputMonitor(model2, neuron.LIFNode)
+        spike_monitor_LIF = monitor.OutputMonitor(model2, neuron.ParametricDriveLIFNode)
         index = args.layer.rfind('_')  
         monitor_index = args.layer[:index] + '.' + args.layer[index + 1:]
 
@@ -132,7 +132,7 @@ class Cifar10NetTester(train_classify.Trainer_step):
         avg_spike_IF = sum(spikes_IF) / len(spikes_IF)
         avg_spike_LIF = sum(spikes_LIF) / len(spikes_LIF)
         
-        print(f"{args.layer} avgspike_IF: {avg_spike_IF} avgspike_LIF: {avg_spike_LIF}")
+        print(f"{args.layer} avgspike_IF: {avg_spike_IF} avgspike_ParametricDriveLIF: {avg_spike_LIF}")
 
         
             
@@ -158,7 +158,7 @@ class Cifar10NetTester(train_classify.Trainer_step):
         
         
 if __name__ == "__main__":
-    #nohup python test_IFNode\&LIFNode_spikerate.py --layer conv_fc_2 -T 20 --data-path ~/workspace/dataset --model CIFAR10Net --device cuda:1 -j 4 --test-only --resume ./logs/pt/CIFAR10Net_t20_b50_e50_adamw_lr0.001_wd0.0_ls0.1_ma0.0_ca0.0_sbn0_ra0_re0.0_aaugNone_size176_232_224_seed2020/checkpoint_latest.pth --resume2 ./logs/pt/CIFAR10Net_t20_b50_e50_adamw_lr0.001_wd0.0_ls0.1_ma0.0_ca0.0_sbn0_ra0_re0.0_aaugNone_size176_232_224_seed2020_LIFNode/checkpoint_latest.pth  > ./logs/test_IFNode\&LIFNode_spikerate_conv_2_log.log 2>&1 &
+    #nohup python test_IFNode\&LIFNode_spikerate.py --layer conv_fc_2 -T 20 --data-path ~/workspace/dataset --model CIFAR10Net --device cuda:1 -j 4 --test-only --resume ./logs/pt/CIFAR10Net_t20_b50_e50_adamw_lr0.001_wd0.0_ls0.1_ma0.0_ca0.0_sbn0_ra0_re0.0_aaugNone_size176_232_224_seed2020/checkpoint_latest.pth --resume2 ./logs/pt/CIFAR10Net_t20_b50_e50_adamw_lr0.001_wd0.0_ls0.1_ma0.0_ca0.0_sbn0_ra0_re0.0_aaugNone_size176_232_224_seed2020_para_drive_LIFNode/checkpoint_latest.pth  > ./logs/test_IFNode\&ParametricDriveLIFNode_spikerate_conv_2_log.log 2>&1 &
     
     trainer = Cifar10NetTester()
     args = trainer.get_args_parser().parse_args()
