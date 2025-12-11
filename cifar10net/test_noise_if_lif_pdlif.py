@@ -18,7 +18,7 @@ from FTtool import noise
 
 # print(spikingjelly.__file__)
 
-class Cifar10NetTester(train_classify.Trainer_step):
+class Cifar10NetNoiseTester(train_classify.Trainer_step):
     def load_CIFAR10(self, args):
         # Data loading code
         print("Loading data")
@@ -96,12 +96,13 @@ class Cifar10NetTester(train_classify.Trainer_step):
         # parser.add_argument('--rate', default=50, type=int, help="set the saturate rate")
         # parser.add_argument('--train-rate', default=0.07, type=float, help="choose which parameter trained with 'train-rate' saturate")
         parser.add_argument("--resume2", default=None, type=str, help="another path of checkpoint. If set to 'latest', it will try to load the latest checkpoint")
+        parser.add_argument("--resume3", default=None, type=str, help="another path of checkpoint. If set to 'latest', it will try to load the latest checkpoint")
         
         return parser
     
     
     def get_tb_logdir_name(self, args):
-        tb_dir = 'test/'+ f'{args.model}' + '_test_Gaussian_noise_' + 'mean0_std1_ParametricDriveLIFNode' 
+        tb_dir = 'test/'+ f'{args.model}' + '_test_Gaussian_noise_' + 'mean0_std1_if_lif_pdlif' 
         return tb_dir
 
 
@@ -111,9 +112,9 @@ class Cifar10NetTester(train_classify.Trainer_step):
         header = f"Test: {log_suffix}"
         
         
-        spiking_neurons = [neuron.ParametricDriveLIFNode] * 8
+        spiking_neurons2 = [neuron.LIFNode] * 8
         
-        model2 = parametric_lif_net.__dict__[args.model](spiking_neurons=spiking_neurons,
+        model2 = parametric_lif_net.__dict__[args.model](spiking_neurons=spiking_neurons2,
                                                         surrogate_function=surrogate.ATan(), detach_reset=True)
         
         checkpoint = torch.load(args.resume2, map_location="cpu", weights_only=False)
@@ -122,11 +123,24 @@ class Cifar10NetTester(train_classify.Trainer_step):
         model2.load_state_dict(original_dict2)
         model2.to(args.device)
         
+    
+        spiking_neurons3 = [neuron.ParametricDriveLIFNode] * 8
+        
+        model3 = parametric_lif_net.__dict__[args.model](spiking_neurons=spiking_neurons3,
+                                                        surrogate_function=surrogate.ATan(), detach_reset=True)
+        
+        checkpoint = torch.load(args.resume3, map_location="cpu", weights_only=False)
+        original_dict3 = checkpoint["model"]
+        
+        model3.load_state_dict(original_dict3)
+        model3.to(args.device)
+        
         metric_logger = tv_ref_classify.utils.MetricLogger(delimiter="  ")
                 
         num_processed_samples = 0
         processed_time = 0.
         processed_time2 = 0.
+        processed_time3 = 0.
         idx = 0
         with torch.inference_mode():
             for image, target in metric_logger.log_every(data_loader, -1, header):
@@ -136,6 +150,7 @@ class Cifar10NetTester(train_classify.Trainer_step):
 
                 output_fr = 0.
                 output_fr2 = 0.
+                output_fr3 = 0.
                 
                 start_time = time.time()
                 for t in range(args.time_step):
@@ -146,15 +161,24 @@ class Cifar10NetTester(train_classify.Trainer_step):
                 for t in range(args.time_step):
                     output_fr2 += model2(image)
                 processed_time2 += time.time() - start_time
+                
+                start_time = time.time()
+                for t in range(args.time_step):
+                    output_fr3 += model3(image)
+                processed_time3 += time.time() - start_time
+                
                             
                 output_fr = output_fr / args.time_step
                 output_fr2 = output_fr2 / args.time_step
+                output_fr3 = output_fr3 / args.time_step
                 
                 loss = criterion(output_fr, target_onehot)
                 loss2 = criterion(output_fr2, target_onehot)
+                loss3 = criterion(output_fr3, target_onehot)
 
                 acc1, acc5 = self.cal_acc1_acc5(output_fr, target_onehot)
                 acc1_2, acc5_2 = self.cal_acc1_acc5(output_fr2, target_onehot)
+                acc1_3, acc5_3 = self.cal_acc1_acc5(output_fr3, target_onehot)
                 # FIXME need to take into account that the datasets
                 # could have been padded in distributed setup
                 batch_size = target.shape[0]
@@ -166,15 +190,21 @@ class Cifar10NetTester(train_classify.Trainer_step):
                 metric_logger.meters["acc1_2"].update(acc1_2.item(), n=batch_size)
                 metric_logger.meters["acc5_2"].update(acc5_2.item(), n=batch_size)
                 
+                metric_logger.update(loss3=loss3.item())
+                metric_logger.meters["acc1_3"].update(acc1_3.item(), n=batch_size)
+                metric_logger.meters["acc5_3"].update(acc5_3.item(), n=batch_size)
+                
                 num_processed_samples += batch_size
                 
 
                 
                 processed_time = 0.
                 processed_time2 = 0.
+                processed_time3 = 0.
                 idx += 1
                 functional.reset_net(model)
                 functional.reset_net(model2)
+                functional.reset_net(model3)
         # gather the stats from all processes
 
         num_processed_samples = tv_ref_classify.utils.reduce_across_processes(num_processed_samples)
@@ -195,6 +225,7 @@ class Cifar10NetTester(train_classify.Trainer_step):
 
         test_loss, test_acc1, test_acc5 = metric_logger.loss.global_avg, metric_logger.acc1.global_avg, metric_logger.acc5.global_avg
         test_loss2, test_acc1_2, test_acc5_2 = metric_logger.loss2.global_avg, metric_logger.acc1_2.global_avg, metric_logger.acc5_2.global_avg
+        test_loss3, test_acc1_3, test_acc5_3 = metric_logger.loss3.global_avg, metric_logger.acc1_3.global_avg, metric_logger.acc5_3.global_avg
     
         
         print(
@@ -203,10 +234,14 @@ class Cifar10NetTester(train_classify.Trainer_step):
             f"test_acc1={test_acc1:.3f}, "
             f"test_acc5={test_acc5:.3f}, "
             f"test_loss={test_loss:.6f}, "
-            "ParametricDriveLIFNode: "
+            "LIFNode: "
             f"test_acc1={test_acc1_2:.3f}, "
             f"test_acc5={test_acc5_2:.3f}, "
             f"test_loss={test_loss2:.6f}, "
+            "ParametricDriveLIFNode: "
+            f"test_acc1={test_acc1_3:.3f}, "
+            f"test_acc5={test_acc5_3:.3f}, "
+            f"test_loss={test_loss3:.6f}, "
         )
 
              
@@ -233,6 +268,6 @@ class Cifar10NetTester(train_classify.Trainer_step):
 if __name__ == "__main__":
     #nohup python test_noise.py -T 20 --data-path ~/workspace/dataset --model CIFAR10Net --device cuda:0 -j 4 --test-only --resume ./logs/pt/CIFAR10Net_t20_b50_e50_adamw_lr0.001_wd0.0_ls0.1_ma0.0_ca0.0_sbn0_ra0_re0.0_aaugNone_size176_232_224_seed2020/checkpoint_latest.pth --resume2 ./logs/pt/CIFAR10Net_t20_b50_e50_adamw_lr0.001_wd0.0_ls0.1_ma0.0_ca0.0_sbn0_ra0_re0.0_aaugNone_size176_232_224_seed2020_para_drive_LIFNode/checkpoint_latest.pth  > ./logs/test_noise_parametric_drive_LIFNode.log 2>&1 &
     
-    trainer = Cifar10NetTester()
+    trainer = Cifar10NetNoiseTester()
     args = trainer.get_args_parser().parse_args()
     trainer.main(args)

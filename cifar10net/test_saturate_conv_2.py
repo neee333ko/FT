@@ -5,6 +5,8 @@ import time
 import warnings
 import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
+import neuron_dict
+import yaml
 
 # sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'spikingjelly')))
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', )))
@@ -16,6 +18,7 @@ from FTtool import inject
 
 # print(spikingjelly.__file__)
 
+
 class Cifar10NetTester(train_classify.Trainer_step):
     def load_data(self, args):
         return super().load_CIFAR10(args)
@@ -25,14 +28,24 @@ class Cifar10NetTester(train_classify.Trainer_step):
         parser = super().get_args_parser()
         parser.add_argument('--cupy', action="store_true", help="set the neurons to use cupy backend")
         parser.add_argument('--rate', default=100, type=int, help="set the saturate rate")
-        parser.add_argument('--train-rate', default=0.07, type=float, help="choose which parameter trained with 'train-rate' saturate")
-        parser.add_argument("--resume2", default=None, type=str, help="another path of checkpoint. If set to 'latest', it will try to load the latest checkpoint")
+        parser.add_argument('--config', default='./config/neurons_of_test_saturate.py.yaml', type=str, help="neurons")
+        parser.add_argument('--layers', default='./config/layers_of_test_saturate.py.yaml', type=str, help="layers of saturate")
         
         return parser
-    
-    
+
     def get_tb_logdir_name(self, args):
-        tb_dir = 'test/'+ f'{args.model}' + '_test_Saturate_' + f'{args.train_rate}_' +f'{args.rate}' 
+        with open(args.config, 'r') as f:
+            cfg = yaml.safe_load(f)
+        
+        neuron_names = cfg["spiking_neurons"]
+
+
+        with open(args.layers, 'r') as f:
+            cfg = yaml.safe_load(f)
+
+        layers = cfg["layers"]
+
+        tb_dir = 'test/'+ f'{args.model}' + f'_test_saturate_rate_{layers}_{neuron_names}' 
         return tb_dir
 
 
@@ -41,17 +54,22 @@ class Cifar10NetTester(train_classify.Trainer_step):
         
         header = f"Test: {log_suffix}"
         
-        tb_dir_2 = self.get_tb_logdir_name(args) + "_2"
-        tb_dir_2 = os.path.join(args.output_dir, tb_dir_2)
+        # tb_dir_2 = self.get_tb_logdir_name(args) + "_2"
+        # tb_dir_2 = os.path.join(args.output_dir, tb_dir_2)
         
-        os.makedirs(tb_dir_2, exist_ok=True)
+        # os.makedirs(tb_dir_2, exist_ok=True)
         
-        tb_writer_2 = SummaryWriter(tb_dir_2, purge_step=args.start_epoch)
+        # tb_writer_2 = SummaryWriter(tb_dir_2, purge_step=args.start_epoch)
         
         original_dict = model.state_dict()
+        
+        with open(args.layers, 'r') as f:
+            cfg = yaml.safe_load(f)
 
-        checkpoint = torch.load(args.resume2, map_location="cpu", weights_only=False)
-        original_dict2 = checkpoint["model"]
+        layers = cfg["layers"]
+
+        # checkpoint = torch.load(args.resume2, map_location="cpu", weights_only=False)
+        # original_dict2 = checkpoint["model"]
 
         rate = 0
         
@@ -62,11 +80,7 @@ class Cifar10NetTester(train_classify.Trainer_step):
             metrics_loss = []
             metrics_velo = []
             
-            metrics_acc1_satu = []
-            metrics_acc5_satu = []
-            metrics_loss_satu = []
-            metrics_velo_satu = []
-            while round < 5:
+            while round < 10:
                 metric_logger = tv_ref_classify.utils.MetricLogger(delimiter="  ")
                 
                 model = self.load_model(args,10)
@@ -88,11 +102,11 @@ class Cifar10NetTester(train_classify.Trainer_step):
                             
                         break
             
-                inject.inject_saturate(model,["conv_fc.2"],[rate/100])
+                inject.inject_saturate(model,layers,[rate/100])
                 
                 functional.reset_net(model)
                 
-                # 正常训练参数测试
+                
                 num_processed_samples = 0
                 start_time = time.time()
                 with torch.inference_mode():
@@ -142,59 +156,6 @@ class Cifar10NetTester(train_classify.Trainer_step):
                 metrics_acc1.append(test_acc1)
                 metrics_acc5.append(test_acc5)
                 metrics_velo.append(num_processed_samples/(time.time() - start_time))
-                
-                # 饱和训练参数测试
-                model.load_state_dict(original_dict2)    
-            
-                num_processed_samples = 0
-                start_time = time.time()
-                with torch.inference_mode():
-                    for image, target in metric_logger.log_every(data_loader, -1, header):
-                        image = image.to(device, non_blocking=True)
-                        target = target.to(device, non_blocking=True)
-                        target_onehot = F.one_hot(target.long(), num_classes).float()
-
-                        output_fr = 0.
-                        
-                        for t in range(args.time_step):
-                            output_fr += model(image)
-                                    
-                        output_fr = output_fr / args.time_step
-                        loss = criterion(output_fr, target_onehot)
-
-                        acc1, acc5 = self.cal_acc1_acc5(output_fr, target_onehot)
-                        # FIXME need to take into account that the datasets
-                        # could have been padded in distributed setup
-                        batch_size = target.shape[0]
-                        metric_logger.update(loss_satu=loss.item())
-                        metric_logger.meters["acc1_satu"].update(acc1.item(), n=batch_size)
-                        metric_logger.meters["acc5_satu"].update(acc5.item(), n=batch_size)
-                        num_processed_samples += batch_size
-                        functional.reset_net(model)
-                # gather the stats from all processes
-
-                num_processed_samples = tv_ref_classify.utils.reduce_across_processes(num_processed_samples)
-                if (
-                    hasattr(data_loader.dataset, "__len__")
-                    and len(data_loader.dataset) != num_processed_samples
-                    and torch.distributed.get_rank() == 0
-                ):
-                    # See FIXME above
-                    warnings.warn(
-                        f"It looks like the dataset has {len(data_loader.dataset)} samples, but {num_processed_samples} "
-                        "samples were used for the validation, which might bias the results. "
-                        "Try adjusting the batch size and / or the world size. "
-                        "Setting the world size to 1 is always a safe bet."
-                    )
-
-                metric_logger.synchronize_between_processes()
-
-                test_loss, test_acc1, test_acc5 = metric_logger.loss_satu.global_avg, metric_logger.acc1_satu.global_avg, metric_logger.acc5_satu.global_avg
-                
-                metrics_loss_satu.append(test_loss)
-                metrics_acc1_satu.append(test_acc1)
-                metrics_acc5_satu.append(test_acc5)
-                metrics_velo_satu.append(num_processed_samples/(time.time() - start_time))
         
                 round += 1
 
@@ -208,28 +169,13 @@ class Cifar10NetTester(train_classify.Trainer_step):
             tb_writer.add_scalar("acc5", test_acc5, rate)
             tb_writer.add_scalar("velo", test_velo, rate)
             
-            test_acc1_satu = sum(metrics_acc1_satu) / len(metrics_acc1_satu)
-            test_acc5_satu = sum(metrics_acc5_satu) / len(metrics_acc5_satu)
-            test_loss_satu = sum(metrics_loss_satu) / len(metrics_loss_satu)
-            test_velo_satu = sum(metrics_velo_satu) / len(metrics_velo_satu)
-            
-            tb_writer_2.add_scalar("loss", test_loss_satu, rate)
-            tb_writer_2.add_scalar("acc1", test_acc1_satu, rate)
-            tb_writer_2.add_scalar("acc5", test_acc5_satu, rate)
-            tb_writer_2.add_scalar("velo", test_velo_satu, rate)
             
             print(
                 f"Test:Saturate_rate:{rate/100}, "
-                "Original: "
                 f"test_acc1={test_acc1:.3f}, "
                 f"test_acc5={test_acc5:.3f}, "
                 f"test_loss={test_loss:.6f}, "
                 f"samples/s={test_velo:.3f}, "
-                "Satu_Train: "
-                f"test_acc1={test_acc1_satu:.3f}, "
-                f"test_acc5={test_acc5_satu:.3f}, "
-                f"test_loss={test_loss_satu:.6f}, "
-                f"samples/s={test_velo_satu:.3f}, "
             )
 
               
@@ -237,14 +183,16 @@ class Cifar10NetTester(train_classify.Trainer_step):
             
         tb_writer.flush()
         tb_writer.close()
-        tb_writer_2.flush()
-        tb_writer_2.close()
-
 
 
 
     def load_model(self, args, num_classes):
-        spiking_neurons = [neuron.IFNode] * 8
+        with open(args.config, 'r') as f:
+            cfg = yaml.safe_load(f)
+        
+        neuron_names = cfg["spiking_neurons"]
+
+        spiking_neurons = [neuron_dict.NEURON_DICT[name] for name in neuron_names]
         
         if args.model in parametric_lif_net.__all__:
             model = parametric_lif_net.__dict__[args.model](spiking_neurons=spiking_neurons,

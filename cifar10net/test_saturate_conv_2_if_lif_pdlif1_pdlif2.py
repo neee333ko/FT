@@ -27,6 +27,8 @@ class Cifar10NetTester(train_classify.Trainer_step):
         parser.add_argument('--rate', default=100, type=int, help="set the weight fault inject rate")
         # parser.add_argument('--train-rate', default=0.07, type=float, help="choose which parameter trained with 'train-rate' saturate")
         parser.add_argument("--resume2", default=None, type=str, help="another path of checkpoint. If set to 'latest', it will try to load the latest checkpoint")
+        parser.add_argument("--resume3", default=None, type=str, help="another path of checkpoint. If set to 'latest', it will try to load the latest checkpoint")
+        parser.add_argument("--resume4", default=None, type=str, help="another path of checkpoint. If set to 'latest', it will try to load the latest checkpoint")
         
         return parser
     
@@ -246,19 +248,19 @@ class Cifar10NetTester(train_classify.Trainer_step):
                         # FIXME need to take into account that the datasets
                         # could have been padded in distributed setup
                         batch_size = target.shape[0]
-                        metric_logger.update(loss=loss_if.item())
+                        metric_logger.update(loss_if=loss_if.item())
                         metric_logger.meters["acc1_if"].update(acc1_if.item(), n=batch_size)
                         metric_logger.meters["acc5_if"].update(acc5_if.item(), n=batch_size)
                         
-                        metric_logger.update(loss=loss_lif.item())
+                        metric_logger.update(loss_lif=loss_lif.item())
                         metric_logger.meters["acc1_lif"].update(acc1_lif.item(), n=batch_size)
                         metric_logger.meters["acc5_lif"].update(acc5_lif.item(), n=batch_size)
                         
-                        metric_logger.update(loss=loss_pdlif1.item())
+                        metric_logger.update(loss_pdlif1=loss_pdlif1.item())
                         metric_logger.meters["acc1_pdlif1"].update(acc1_pdlif1.item(), n=batch_size)
                         metric_logger.meters["acc5_pdlif1"].update(acc5_pdlif1.item(), n=batch_size)
                         
-                        metric_logger.update(loss=loss_pdlif2.item())
+                        metric_logger.update(loss_pdlif2=loss_pdlif2.item())
                         metric_logger.meters["acc1_pdlif2"].update(acc1_pdlif2.item(), n=batch_size)
                         metric_logger.meters["acc5_pdlif2"].update(acc5_pdlif2.item(), n=batch_size)
                         
@@ -305,6 +307,8 @@ class Cifar10NetTester(train_classify.Trainer_step):
                 metrics_loss_pdlif2.append(test_loss_pdlif2)
                 metrics_acc1_pdlif2.append(test_acc1_pdlif2)
                 metrics_acc5_pdlif2.append(test_acc5_pdlif2)
+                
+                round += 1
 
 
             tb_writer.add_scalar("loss", sum(metrics_loss_if)/len(metrics_loss_if), rate)
@@ -319,9 +323,9 @@ class Cifar10NetTester(train_classify.Trainer_step):
             tb_writer_3.add_scalar("acc1", sum(metrics_acc1_pdlif1)/len(metrics_acc1_pdlif1), rate)
             tb_writer_3.add_scalar("acc5", sum(metrics_acc5_pdlif1)/len(metrics_acc5_pdlif1), rate)
 
-            tb_writer_3.add_scalar("loss", sum(metrics_loss_pdlif2)/len(metrics_loss_pdlif2), rate)
-            tb_writer_3.add_scalar("acc1", sum(metrics_acc1_pdlif2)/len(metrics_acc1_pdlif2), rate)
-            tb_writer_3.add_scalar("acc5", sum(metrics_acc5_pdlif2)/len(metrics_acc5_pdlif2), rate)
+            tb_writer_4.add_scalar("loss", sum(metrics_loss_pdlif2)/len(metrics_loss_pdlif2), rate)
+            tb_writer_4.add_scalar("acc1", sum(metrics_acc1_pdlif2)/len(metrics_acc1_pdlif2), rate)
+            tb_writer_4.add_scalar("acc5", sum(metrics_acc5_pdlif2)/len(metrics_acc5_pdlif2), rate)
             
             print(
                 f"Test:saturate_rate:{rate/100}, "
@@ -374,7 +378,7 @@ class Cifar10NetTester(train_classify.Trainer_step):
         
         
 if __name__ == "__main__":
-    #nohup python test_saturate_LIFNode_conv_2.py -T 20 --data-path ~/workspace/dataset --model CIFAR10Net --device cuda:5 -j 4 --test-only --resume ./logs/pt/CIFAR10Net_t20_b50_e50_adamw_lr0.001_wd0.0_ls0.1_ma0.0_ca0.0_sbn0_ra0_re0.0_aaugNone_size176_232_224_seed2020/checkpoint_latest.pth --resume2 ./logs/pt/CIFAR10Net_t20_b50_e50_adamw_lr0.001_wd0.0_ls0.1_ma0.0_ca0.0_sbn0_ra0_re0.0_aaugNone_size176_232_224_seed2020_LIFNode/checkpoint_latest.pth  > ./logs/test_saturate_LIFNode_conv_2_log.log 2>&1 &
+    #nohup python test_saturate_conv_2_if_lif_pdlif1_pdlif2.py -T 20 --data-path ~/workspace/dataset --model CIFAR10Net --device cuda:1 -j 4 --test-only --resume ./logs/pt/CIFAR10Net_t20_b50_e50_adamw_lr0.001_wd0.0_ls0.1_ma0.0_ca0.0_sbn0_ra0_re0.0_aaugNone_size176_232_224_seed2020/checkpoint_latest.pth --resume2 ./logs/pt/CIFAR10Net_t20_b50_e50_adamw_lr0.001_wd0.0_ls0.1_ma0.0_ca0.0_sbn0_ra0_re0.0_aaugNone_size176_232_224_seed2020_LIFNode/checkpoint_latest.pth --resume3 ./logs/pt/CIFAR10Net_t20_b50_e50_adamw_lr0.001_wd0.0_ls0.1_ma0.0_ca0.0_sbn0_ra0_re0.0_aaugNone_size176_232_224_seed2020_para_drive_LIFNode/checkpoint_latest.pth --resume4 "./logs/pt/CIFAR10Net_t20_b50_e50_adamw_lr0.001_wd0.0_ls0.1_ma0.0_ca0.0_sbn0_ra0_re0.0_aaugNone_size176_232_224_seed2020_['pdlif', 'pdlif', 'pdlif', 'pdlif', 'pdlif', 'pdlif', 'pdlif', 'pdlif']/checkpoint_latest.pth"  > ./logs/test_saturate_conv_2_if_lif_pdlif1_pdlif2.log 2>&1 &
     
     trainer = Cifar10NetTester()
     args = trainer.get_args_parser().parse_args()

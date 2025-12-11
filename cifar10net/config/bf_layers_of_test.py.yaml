@@ -1,0 +1,9 @@
+layers:
+  - conv.fc.2
+  - conv.fc.5
+  - conv.fc.8
+  - conv.fc.12
+  - conv.fc.15
+  - conv.fc.18
+  - conv.fc.23
+  - conv.fc.26

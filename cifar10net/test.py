@@ -4,6 +4,8 @@ import os
 import time
 import warnings
 import torch.nn.functional as F
+import yaml
+import neuron_dict
 
 # sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'spikingjelly')))
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', )))
@@ -15,6 +17,7 @@ from FTtool import inject
 
 # print(spikingjelly.__file__)
 
+
 class Cifar10NetTester(train_classify.Trainer_step):
     def load_data(self, args):
         return super().load_CIFAR10(args)
@@ -23,19 +26,38 @@ class Cifar10NetTester(train_classify.Trainer_step):
     def get_args_parser(self, add_help=True):
         parser = super().get_args_parser()
         parser.add_argument('--cupy', action="store_true", help="set the neurons to use cupy backend")
-        parser.add_argument('--rate', default=100, type=int, help="bit flip rate")
+        parser.add_argument('--rate', default=10, type=int, help="bit flip rate")
+        # parser.add_argument('--layers', default='./config/bf_layers_of_test.py.yaml', type=str, help="layers of bf")
+        parser.add_argument('--config', default='./config/neurons_of_test.py.yaml', type=str, help="neurons")
+        parser.add_argument('--tag', default='' ,type=str, help="used for extra mark")
+        
         return parser
     
     
     def get_tb_logdir_name(self, args):
-        tb_dir = 'test/'+ f'{args.model}' + '_test_BF_' + f'{args.rate}' 
-        return tb_dir
+        # with open(args.layers, 'r') as f:
+        #     cfg = yaml.safe_load(f)
 
+        # layers = cfg["layers"]
+        
+        with open(args.config, 'r') as f:
+            cfg = yaml.safe_load(f)
+        
+        neuron_names = cfg["spiking_neurons"]
+        
+        tb_dir = 'test/'+ f'{args.model}' + f'_test_BFrate:{args.rate}_neurons:{neuron_names}_TAG:{args.tag}' 
+        
+        return tb_dir
 
     def evaluate(self, args, model, criterion, data_loader, tb_writer, device, num_classes, log_suffix=""):
         model.eval()
         metric_logger = tv_ref_classify.utils.MetricLogger(delimiter="  ")
         header = f"Test: {log_suffix}"
+
+        # with open(args.layers, 'r') as f:
+        #     cfg = yaml.safe_load(f)
+
+        # layers = cfg["layers"]
 
         original_dict = model.state_dict()
 
@@ -47,15 +69,16 @@ class Cifar10NetTester(train_classify.Trainer_step):
             metrics_acc5 = []
             metrics_loss = []
             metrics_velo = []
-            while round < 5:
+            while round < 20:
                 model.load_state_dict(original_dict)
                 
-                state_dict_fault = inject.inject_weight(model, rate/1000)
+                convs,state_dict = inject.get_convs(model)
+                
+                state_dict_fault,maps = inject.inject_weight(convs ,state_dict, rate/10000, None)
         
                 model.load_state_dict(state_dict_fault)
                 
                 round += 1
-
 
                 num_processed_samples = 0
                 start_time = time.time()
@@ -117,9 +140,9 @@ class Cifar10NetTester(train_classify.Trainer_step):
             tb_writer.add_scalar("acc5", test_acc5, rate)
             tb_writer.add_scalar("velo", test_velo, rate)
             
-            print(f'Test:BF_rate:{rate/1000}, test_acc1={test_acc1:.3f}, test_acc5={test_acc5:.3f}, test_loss={test_loss:.6f}, samples/s={test_velo:.3f}')
+            print(f'Test:BF_rate:{rate/10000}, test_acc1={test_acc1:.3f}, test_acc5={test_acc5:.3f}, test_loss={test_loss:.6f}, samples/s={test_velo:.3f}')
               
-            rate += 2  
+            rate += 1 
             
         tb_writer.flush()
         tb_writer.close()
@@ -128,12 +151,17 @@ class Cifar10NetTester(train_classify.Trainer_step):
 
 
     def load_model(self, args, num_classes):
+        with open(args.config, 'r') as f:
+            cfg = yaml.safe_load(f)
+        
+        neuron_names = cfg["spiking_neurons"]
+
+        spiking_neurons = [neuron_dict.NEURON_DICT[name] for name in neuron_names]
+        
         if args.model in parametric_lif_net.__all__:
-            model = parametric_lif_net.__dict__[args.model](spiking_neuron=neuron.IFNode,
-                                                        surrogate_function=surrogate.ATan(), detach_reset=True)
+            model = parametric_lif_net.__dict__[args.model](spiking_neurons=spiking_neurons,
+                                                        surrogate_function=surrogate.ATan(), detach_reset=True, drive=0.1)
             functional.set_step_mode(model, step_mode='s')
-            if args.cupy:
-                functional.set_backend(model, 'cupy', neuron.IFNode)
 
             return model
         else:
@@ -141,7 +169,7 @@ class Cifar10NetTester(train_classify.Trainer_step):
         
         
 if __name__ == "__main__":
-    # nohup python test.py --data-path ~/workspace/dataset --model CIFAR10Net --device cuda:6 -j 4 --test-only --resume ./logs/pt/CIFAR10Net_t20_b50_e50_sgd_lr0.001_wd0.0_ls0.1_ma0.0_ca0.0_sbn0_ra0_re0.0_aaugNone_size176_232_224_seed2020/checkpoint_latest.pth > ./logs/test_log.log 2>&1 &
+    # nohup python test.py -T 20 --data-path ~/workspace/dataset --model CIFAR10Net --device cuda:1 -j 4 --test-only --resume ./logs/pt/CIFAR10Net_t20_b50_e50_adamw_lr0.001_wd0.0_ls0.1_ma0.0_ca0.0_sbn0_ra0_re0.0_aaugNone_size176_232_224_seed2020/checkpoint_latest.pth > ./logs/test_if.log 2>&1 &
     trainer = Cifar10NetTester()
     args = trainer.get_args_parser().parse_args()
     trainer.main(args)
